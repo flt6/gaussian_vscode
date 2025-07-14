@@ -1,0 +1,33 @@
+{
+  "Gaussian Basic Template": {
+    "prefix": ["gauss", "gaussian", "template"],
+    "body": [
+      "%NProcShared=32",
+      "%chk=${TM_FILENAME_BASE}.chk",
+      "%mem=30GB",
+      "#p $1",
+      "",
+      "$2",
+      "",
+      "0 1",
+      "$0"
+    ],
+    "description": "Gaussian 基础输入文件模板"
+  },
+  
+  "Gaussian Optimization": {
+    "prefix": ["opt", "optimization"],
+    "body": [
+      "%NProcShared=32", 
+      "%chk=${TM_FILENAME_BASE}.chk",
+      "%mem=30GB",
+      "#p ${1|wB97XD|}/def2-SVP opt",
+      "",
+      "${2|Job descript|}",
+      "",
+      "0 1",
+      "$0"
+    ],
+    "description": "几何优化计算模板"
+  }
+}

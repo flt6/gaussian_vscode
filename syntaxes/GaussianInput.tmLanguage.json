@@ -1,0 +1,137 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Gaussian Input File",
+	"patterns": [
+		{
+			"include": "#link0"
+		},
+		{
+			"include": "#route"
+		},
+		{
+			"include": "#comments"
+		},
+		{
+			"include": "#title"
+		},
+		{
+			"include": "#coordinates"
+		},
+		{
+			"include": "#numbers"
+		},
+		{
+			"include": "#strings"
+		}
+	],
+	"repository": {
+		"link0": {
+			"patterns": [
+				{
+					"name": "keyword.control.link0.gaussian",
+					"match": "^\\s*%\\w+.*$"
+				}
+			]
+		},
+		"route": {
+			"patterns": [
+				{
+					"name": "keyword.control.route.gaussian",
+					"begin": "^\\s*#",
+					"end": "$",
+					"patterns": [
+						{
+							"include": "#route_keywords"
+						},
+						{
+							"include": "#route_options"
+						}
+					]
+				}
+			]
+		},
+		"route_keywords": {
+			"patterns": [
+				{
+					"name": "keyword.other.method.gaussian",
+					"match": "\\b(?i)(HF|MP2|MP3|MP4|MP5|CCSD|CCSDT|QCISD|CID|CISD|CIS|B3LYP|B3PW91|BLYP|PBE|PBE0|M06|M062X|CAM-B3LYP|wB97XD|LC-wPBE)\\b"
+				},
+				{
+					"name": "keyword.other.basis.gaussian",
+					"match": "\\b(?i)(STO-3G|3-21G|6-31G|6-311G|cc-pVDZ|cc-pVTZ|cc-pVQZ|aug-cc-pVDZ|aug-cc-pVTZ|def2-SVP|def2-TZVP|LANL2DZ)\\b"
+				},
+				{
+					"name": "keyword.other.job.gaussian",
+					"match": "\\b(?i)(SP|OPT|FREQ|IRC|SCAN|NMR|POP|POLAR|STABLE|FORCE|GUESS|SCF|TD)\\b"
+				},
+				{
+					"name": "keyword.other.misc.gaussian",
+					"match": "\\b(?i)(SCRF|GEOM|INTEGRAL|DENSITY|NOSYMM|SYMMETRY|CHARGE|UNITS|TEMPERATURE|PRESSURE|COUNTERPOISE|GFINPUT|GFPRINT|IOP)\\b"
+				},
+				{
+					"name": "keyword.other.dispersion.gaussian",
+					"match": "\\b(?i)(em=GD2|em=GD3|em=GD3BJ|em=GD4)\\b"
+				}
+			]
+		},
+		"route_options": {
+			"patterns": [
+				{
+					"name": "string.quoted.parentheses.gaussian",
+					"begin": "\\(",
+					"end": "\\)",
+					"patterns": [
+						{
+							"name": "constant.other.option.gaussian",
+							"match": "[^,\\s)]+[^,)]*"
+						}
+					]
+				}
+			]
+		},
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.exclamation.gaussian",
+					"match": "!.*$"
+				}
+			]
+		},
+		"title": {
+			"patterns": [
+				{
+					"name": "string.unquoted.title.gaussian",
+					"match": "^[^%#!\\s].*(?=\\n\\s*\\n)"
+				}
+			]
+		},
+		"coordinates": {
+			"patterns": [
+				{
+					"name": "entity.name.type.element.gaussian",
+					"match": "\\b(?i)(H|He|Li|Be|B|C|N|O|F|Ne|Na|Mg|Al|Si|P|S|Cl|Ar|K|Ca|Sc|Ti|V|Cr|Mn|Fe|Co|Ni|Cu|Zn|Ga|Ge|As|Se|Br|Kr|Rb|Sr|Y|Zr|Nb|Mo|Tc|Ru|Rh|Pd|Ag|Cd|In|Sn|Sb|Te|I|Xe|Cs|Ba|La|Ce|Pr|Nd|Pm|Sm|Eu|Gd|Tb|Dy|Ho|Er|Tm|Yb|Lu|Hf|Ta|W|Re|Os|Ir|Pt|Au|Hg|Tl|Pb|Bi|Po|At|Rn|Fr|Ra|Ac|Th|Pa|U|Np|Pu|Am|Cm|Bk|Cf|Es|Fm|Md|No|Lr|Rf|Db|Sg|Bh|Hs|Mt|Ds|Rg|Cn|Nh|Fl|Mc|Lv|Ts|Og)\\b"
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{
+					"name": "constant.numeric.gaussian",
+					"match": "[-+]?\\d*\\.?\\d+([eE][-+]?\\d+)?"
+				}
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.gaussian",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.gaussian",
+					"match": "\\\\."
+				}
+			]
+		}
+	},
+	"scopeName": "source.gaussian"
+}

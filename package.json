@@ -1,0 +1,41 @@
+{
+  "name": "gaussian-syntax",
+  "displayName": "Gaussian Syntax",
+  "description": "Syntax highlighting and code completion for Gaussian input files",
+  "version": "0.0.1",
+  "publisher": "flt6",
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [{
+      "id": "GaussianInput",
+      "aliases": ["Gaussian Input File", "GaussianInput"],
+      "extensions": [".gin", ".gjf", ".com"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "GaussianInput",
+      "scopeName": "source.gaussian",
+      "path": "./syntaxes/GaussianInput.tmLanguage.json"
+    }],
+    "snippets": [{
+      "language": "GaussianInput",
+      "path": "./snippets/gaussian.json"
+    }]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.102.0",
+    "@types/node": "^16.x",
+    "typescript": "^4.9.4"
+  }
+}
