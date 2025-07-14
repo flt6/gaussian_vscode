@@ -5,11 +5,16 @@ import { GaussianOutputParser, ParsedOutput, CalculationJob } from './outputPars
 export class GaussianOutputPreviewProvider {
     private static readonly viewType = 'gaussianOutputPreview';
     private static currentPanel: vscode.WebviewPanel | undefined;
+    private static refreshTimer: NodeJS.Timeout | undefined;
+    private static currentUri: vscode.Uri | undefined;
 
     public static async showPreview(uri: vscode.Uri) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
+
+        // 保存当前URI用于刷新
+        GaussianOutputPreviewProvider.currentUri = uri;
 
         // 如果已有预览面板，则重用
         if (GaussianOutputPreviewProvider.currentPanel) {
@@ -31,26 +36,58 @@ export class GaussianOutputPreviewProvider {
         GaussianOutputPreviewProvider.currentPanel.onDidDispose(
             () => {
                 GaussianOutputPreviewProvider.currentPanel = undefined;
+                GaussianOutputPreviewProvider.currentUri = undefined;
+                // 清除定时器
+                if (GaussianOutputPreviewProvider.refreshTimer) {
+                    clearInterval(GaussianOutputPreviewProvider.refreshTimer);
+                    GaussianOutputPreviewProvider.refreshTimer = undefined;
+                }
             },
             null
         );
 
+        // 加载内容
+        await this.loadContent();
+
+        // 启动自动刷新
+        this.startAutoRefresh();
+    }
+
+    private static async loadContent() {
+        if (!GaussianOutputPreviewProvider.currentPanel || !GaussianOutputPreviewProvider.currentUri) {
+            return;
+        }
+
         // 读取文件内容
         try {
-            const document = await vscode.workspace.openTextDocument(uri);
+            const document = await vscode.workspace.openTextDocument(GaussianOutputPreviewProvider.currentUri);
             const content = document.getText();
             
             // 解析输出文件
             const parsedOutput = GaussianOutputParser.parseOutput(content);
             
             // 生成HTML内容
-            const html = this.generateHtmlContent(parsedOutput, path.basename(uri.fsPath));
+            const html = this.generateHtmlContent(parsedOutput, path.basename(GaussianOutputPreviewProvider.currentUri.fsPath));
             
             GaussianOutputPreviewProvider.currentPanel.webview.html = html;
             
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to preview Gaussian output: ${error}`);
         }
+    }
+
+    private static startAutoRefresh() {
+        // 清除现有定时器
+        if (GaussianOutputPreviewProvider.refreshTimer) {
+            clearInterval(GaussianOutputPreviewProvider.refreshTimer);
+        }
+
+        // 设置每5秒刷新一次
+        GaussianOutputPreviewProvider.refreshTimer = setInterval(async () => {
+            if (GaussianOutputPreviewProvider.currentPanel && GaussianOutputPreviewProvider.currentUri) {
+                await this.loadContent();
+            }
+        }, 5000);
     }
 
     private static generateHtmlContent(parsedOutput: ParsedOutput, filename: string): string {
@@ -292,6 +329,7 @@ export class GaussianOutputPreviewProvider {
     <div class="container">
         <h1>📊 Gaussian 输出文件预览</h1>
         <p><strong>文件名:</strong> ${filename}</p>
+        <p style="color: #7f8c8d; font-size: 12px;">⏰ 最后更新: ${new Date().toLocaleString('zh-CN')}</p>
         
         ${this.generateStatusBanner(terminationStatus, terminationMessage)}
         

@@ -210,21 +210,19 @@ export class GaussianOutputParser {
         const lines = content.split('\n');
         
         // 检查正常终止
-        for (const line of lines) {
-            if (line.includes('Normal termination of Gaussian')) {
-                return { status: 'normal', message: '计算正常完成' };
-            }
+        if (lines[lines.length - 2].includes('Normal termination of Gaussian')) {
+            return { status: 'normal', message: '计算正常完成' };
         }
         
         // 检查错误终止
         for (const line of lines) {
             if (line.includes('Error termination')) {
                 // 尝试提取错误信息
-                const errorMatch = line.match(/Error termination.*?in:\s*(.*)/);
+                const errorMatch = line.match(/Error termination via (.+) at/);
                 const errorLocation = errorMatch ? errorMatch[1] : '未知位置';
                 return { 
                     status: 'error', 
-                    message: `计算异常终止 (位置: ${errorLocation})` 
+                    message: `计算异常终止 (${errorLocation})` 
                 };
             }
         }
