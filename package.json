@@ -1,9 +1,9 @@
 {
-  "name": "gaussian-syntax",
-  "displayName": "Gaussian Syntax",
+  "name": "gaussian_input",
+  "displayName": "Gaussian Input File Syntax and Completion",
   "description": "Syntax highlighting and code completion for Gaussian input files",
   "version": "1.0.0",
-  "publisher": "flt6",
+  "publisher": "flt",
   "repository": "https://github.com/flt6/gaussian_vscode",
   "engines": {
     "vscode": "^1.51.0"
