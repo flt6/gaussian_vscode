@@ -295,23 +295,6 @@ export class GaussianOutputPreviewProvider {
         
         ${this.generateStatusBanner(terminationStatus, terminationMessage)}
         
-        <div class="summary-card">
-            <h2 style="margin: 0; background: none; color: white; padding: 0;"> 计算任务概览</h2>
-            <div class="summary-stats">
-                <div class="stat-item">
-                    <div class="stat-number">${totalJobs}</div>
-                    <div class="stat-label">计算任务总数</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">${this.getTotalEnergyResults(jobs)}</div>
-                    <div class="stat-label">参数结果总数</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">${this.getUniqueJobTypes(jobs).length}</div>
-                    <div class="stat-label">计算类型数</div>
-                </div>
-            </div>
-        </div>
         
         <div class="jobs-container">
             ${jobs.map((job, index) => this.generateJobSection(job, index + 1)).join('')}
@@ -401,7 +384,7 @@ export class GaussianOutputPreviewProvider {
                 return `
                     <td ${isHighlight ? 'class="highlight"' : ''} style="text-align: center; padding: 15px; border: 1px solid #ddd;">
                         <div class="method-name" style="margin-bottom: 8px; font-size: 14px;">${result.method}</div>
-                        <div class="energy-value" style="font-size: 12px;">${result.energy.toFixed(7)}</div>
+                        <div class="energy-value" style="font-size: 12px;">${result.energy}</div>
                     </td>
                 `;
             }).join('');
