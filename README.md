@@ -1,6 +1,7 @@
 # Gaussian语法高亮与代码补全插件
 
 这是一个为Visual Studio Code开发的Gaussian输入文件语法高亮和代码补全插件。
+为out文件设计了简单预览。
 
 ## 功能特性
 
