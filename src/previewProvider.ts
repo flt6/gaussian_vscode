@@ -54,7 +54,7 @@ export class GaussianOutputPreviewProvider {
     }
 
     private static generateHtmlContent(parsedOutput: ParsedOutput, filename: string): string {
-        const { jobs, totalJobs } = parsedOutput;
+        const { jobs, totalJobs, terminationStatus, terminationMessage } = parsedOutput;
         
         return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -208,6 +208,54 @@ export class GaussianOutputPreviewProvider {
             margin: 20px 0;
         }
         
+        .status-banner {
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .status-normal {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            border-left: 5px solid #00a085;
+        }
+        
+        .status-error {
+            background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+            color: white;
+            border-left: 5px solid #c0392b;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-running {
+            background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+            color: white;
+            border-left: 5px solid #e67e22;
+        }
+        
+        .status-unknown {
+            background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+            color: white;
+            border-left: 5px solid #555;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .status-icon {
+            font-size: 24px;
+        }
+        
         @media (max-width: 1024px) {
             .jobs-container {
                 grid-template-columns: repeat(2, 1fr);
@@ -245,6 +293,8 @@ export class GaussianOutputPreviewProvider {
         <h1>📊 Gaussian 输出文件预览</h1>
         <p><strong>文件名:</strong> ${filename}</p>
         
+        ${this.generateStatusBanner(terminationStatus, terminationMessage)}
+        
         <div class="summary-card">
             <h2 style="margin: 0; background: none; color: white; padding: 0;"> 计算任务概览</h2>
             <div class="summary-stats">
@@ -269,6 +319,43 @@ export class GaussianOutputPreviewProvider {
     </div>
 </body>
 </html>`;
+    }
+
+    private static generateStatusBanner(status: string, message?: string): string {
+        let statusClass = '';
+        let statusIcon = '';
+        let statusText = '';
+        
+        switch (status) {
+            case 'normal':
+                statusClass = 'status-normal';
+                statusIcon = '✅';
+                statusText = message || '计算正常完成';
+                break;
+            case 'error':
+                statusClass = 'status-error';
+                statusIcon = '❌';
+                statusText = message || '计算异常终止';
+                break;
+            case 'running':
+                statusClass = 'status-running';
+                statusIcon = '⏳';
+                statusText = message || '计算可能仍在进行中';
+                break;
+            case 'unknown':
+            default:
+                statusClass = 'status-unknown';
+                statusIcon = '❓';
+                statusText = message || '无法确定计算状态';
+                break;
+        }
+        
+        return `
+            <div class="status-banner ${statusClass}">
+                <span class="status-icon">${statusIcon}</span>
+                <span>${statusText}</span>
+            </div>
+        `;
     }
 
     private static getTotalEnergyResults(jobs: CalculationJob[]): number {

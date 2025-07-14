@@ -18,12 +18,17 @@ export interface CalculationJob {
 export interface ParsedOutput {
     jobs: CalculationJob[];
     totalJobs: number;
+    terminationStatus: 'normal' | 'error' | 'running' | 'unknown';
+    terminationMessage?: string;
 }
 
 export class GaussianOutputParser {
     
     static parseOutput(content: string): ParsedOutput {
         const jobs: CalculationJob[] = [];
+        
+        // 检查计算终止状态
+        const terminationInfo = this.checkTerminationStatus(content);
         
         // 查找关键行 (Enter /share/apps/soft/g16/l9999.exe)
         const keyLine = '(Enter /share/apps/soft/g16/l9999.exe)';
@@ -61,7 +66,9 @@ export class GaussianOutputParser {
         
         return {
             jobs,
-            totalJobs: jobs.length
+            totalJobs: jobs.length,
+            terminationStatus: terminationInfo.status,
+            terminationMessage: terminationInfo.message
         };
     }
     
@@ -147,6 +154,7 @@ export class GaussianOutputParser {
         if (!route && energyResults.length === 0) {
             return null;
         }
+        title = route.split("\n")[1]
         route = route.split("\n")[0]
         
         return {
@@ -196,5 +204,44 @@ export class GaussianOutputParser {
         };
         
         return descriptions[method] || method;
+    }
+    
+    private static checkTerminationStatus(content: string): { status: 'normal' | 'error' | 'running' | 'unknown', message?: string } {
+        const lines = content.split('\n');
+        
+        // 检查正常终止
+        for (const line of lines) {
+            if (line.includes('Normal termination of Gaussian')) {
+                return { status: 'normal', message: '计算正常完成' };
+            }
+        }
+        
+        // 检查错误终止
+        for (const line of lines) {
+            if (line.includes('Error termination')) {
+                // 尝试提取错误信息
+                const errorMatch = line.match(/Error termination.*?in:\s*(.*)/);
+                const errorLocation = errorMatch ? errorMatch[1] : '未知位置';
+                return { 
+                    status: 'error', 
+                    message: `计算异常终止 (位置: ${errorLocation})` 
+                };
+            }
+        }
+        
+        // 检查是否有任何Gaussian特征行，如果没有则状态未知
+        const hasGaussianContent = lines.some(line => 
+            line.includes('Gaussian') || 
+            line.includes('l9999.exe') ||
+            line.includes('Route #') ||
+            line.includes('# ')
+        );
+        
+        if (!hasGaussianContent) {
+            return { status: 'unknown', message: '无法识别的文件内容' };
+        }
+        
+        // 如果有Gaussian内容但没有终止信息，则认为正在运行
+        return { status: 'running', message: '计算可能仍在进行中或已被中断' };
     }
 }

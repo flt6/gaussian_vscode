@@ -1,8 +1,8 @@
 {
-  "name": "gaussian-input",
+  "name": "gaussian-syntax",
   "displayName": "Gaussian Input File Syntax and Completion",
   "description": "Syntax highlighting and code completion for Gaussian input files, And a preview for output",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "flt",
   "repository": "https://github.com/flt6/gaussian_vscode",
   "engines": {
@@ -14,7 +14,8 @@
   "activationEvents": [
     "onLanguage:GaussianInput",
     "onLanguage:GaussianOutput",
-    "onCommand:gaussian.previewOutput"
+    "onCommand:gaussian.previewOutput",
+    "onCommand:gaussian.runInput"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -62,6 +63,11 @@
         "command": "gaussian.previewOutput",
         "title": "Preview Gaussian Output",
         "category": "Gaussian"
+      },
+      {
+        "command": "gaussian.runInput",
+        "title": "Run Gaussian Input",
+        "category": "Gaussian"
       }
     ],
     "menus": {
@@ -70,12 +76,22 @@
           "command": "gaussian.previewOutput",
           "when": "resourceExtname == .out || resourceExtname == .log",
           "group": "navigation"
+        },
+        {
+          "command": "gaussian.runInput",
+          "when": "resourceExtname == .gin || resourceExtname == .gjf || resourceExtname == .com",
+          "group": "navigation"
         }
       ],
       "editor/title": [
         {
           "command": "gaussian.previewOutput",
           "when": "resourceExtname == .out || resourceExtname == .log",
+          "group": "navigation"
+        },
+        {
+          "command": "gaussian.runInput",
+          "when": "resourceExtname == .gin || resourceExtname == .gjf || resourceExtname == .com",
           "group": "navigation"
         }
       ]
