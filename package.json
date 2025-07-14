@@ -1,5 +1,5 @@
 {
-  "name": "gaussian_input",
+  "name": "gaussian-input",
   "displayName": "Gaussian Input File Syntax and Completion",
   "description": "Syntax highlighting and code completion for Gaussian input files, And a preview for output",
   "version": "1.0.1",
