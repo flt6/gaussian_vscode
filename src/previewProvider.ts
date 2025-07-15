@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { GaussianOutputParser, ParsedOutput, CalculationJob } from './outputParser';
+import { GaussianOutputParser, ParsedOutput, CalculationJob, EnergyResult } from './outputParser';
 
 export class GaussianOutputPreviewProvider {
     private static readonly viewType = 'gaussianOutputPreview';
@@ -333,6 +333,7 @@ export class GaussianOutputPreviewProvider {
         
         ${this.generateStatusBanner(terminationStatus, terminationMessage)}
         
+        ${this.generateSimpleTable(jobs)}
         
         <div class="jobs-container">
             ${jobs.map((job, index) => this.generateJobSection(job, index + 1)).join('')}
@@ -378,16 +379,6 @@ export class GaussianOutputPreviewProvider {
             </div>
         `;
     }
-
-    private static getTotalEnergyResults(jobs: CalculationJob[]): number {
-        return jobs.reduce((total, job) => total + job.energyResults.length, 0);
-    }
-
-    private static getUniqueJobTypes(jobs: CalculationJob[]): string[] {
-        const types = new Set(jobs.map(job => job.jobType));
-        return Array.from(types);
-    }
-
     private static generateJobSection(job: CalculationJob, index: number): string {
         return `
             <div class="job-card">
@@ -398,11 +389,19 @@ export class GaussianOutputPreviewProvider {
                 </div>
                 
                 <div style="padding: 20px;">
+                    ${this.generateFinalEnergy(job.finalEnergy)}        
                     <h3 style="margin-top: 0; color: #2c3e50;">⚡ 结果参数</h3>
                     ${this.generateEnergyTable(job.energyResults)}
                 </div>
             </div>
         `;
+    }
+    private static generateFinalEnergy(energy: EnergyResult|undefined): string{
+        if (energy == undefined){
+            return  "";
+        }
+        return `<h3 style="margin-top: 0; color: #2c3e50;">能量：
+        <div class="energy-value" style="font-size: 1.5em;">${energy.energy}</div></h3>`
     }
 
     private static generateEnergyTable(energyResults: any[]): string {
@@ -441,5 +440,76 @@ export class GaussianOutputPreviewProvider {
                 </tbody>
             </table>
         `;
+    }
+
+    private static generateSimpleTable(jobs: CalculationJob[]): string {
+        if (!jobs || jobs.length === 0) {
+            return '<div class="no-data">没有计算任务数据</div>';
+        }
+
+        // 生成表头
+        const headers = new Array<string>();
+        jobs.forEach((job, index) => {
+            headers.push(job.route);
+        });
+
+        // 生成能量行
+        const energyRow = Array<string>();
+        jobs.forEach(job => {
+            if (job.finalEnergy) {
+                energyRow.push(job.finalEnergy.energy.toString());
+            } else {
+                energyRow.push('N/A');
+            }
+        });
+
+        // 生成HTML表格
+        const tableStyle = `
+            style="
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 20px 0; 
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                background-color: #f8f9fa;
+            "
+        `;
+
+        const cellStyle = `
+            style="
+                border: 1px solid #333; 
+                padding: 8px; 
+                text-align: center;
+                background-color: white;
+            "
+        `;
+
+        const headerStyle = `
+            style="
+                border: 1px solid #333; 
+                padding: 8px; 
+                text-align: center;
+                background-color: #e9ecef;
+                font-weight: bold;
+            "
+        `;
+
+        let tableHtml = `
+            <h2>能量表</h2>
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <table ${tableStyle}>
+                    <thead>
+                        <tr>
+                            ${headers.map(h => `<th ${headerStyle}>${h}</th>`).join('')}
+                        </tr>
+                        <tr>
+                            ${energyRow.map(cell => `<td ${cellStyle}>${cell}</td>`).join('')}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        return tableHtml;
     }
 }

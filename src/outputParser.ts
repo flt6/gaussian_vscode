@@ -9,6 +9,7 @@ export interface CalculationJob {
     route: string;
     title: string;
     energyResults: EnergyResult[];
+    finalEnergy?: EnergyResult;
     version?: string;
     state?: string;
     pointGroup?: string;
@@ -70,6 +71,16 @@ export class GaussianOutputParser {
             terminationStatus: terminationInfo.status,
             terminationMessage: terminationInfo.message
         };
+    }
+    
+    /**
+     * 从给定的能量结果中提取最终能量
+     * @param energyResults 能量结果数组
+     * @param route 计算路径（可选，用于辅助判断）
+     * @returns 最终能量结果，如果没有找到则返回 undefined
+     */
+    static getFinalEnergy(energyResults: EnergyResult[], route?: string): EnergyResult | undefined {
+        return this.extractFinalEnergy(energyResults, route || '');
     }
     
     private static parseSummarySection(summaryLines: string[], jobNumber: number): CalculationJob | null {
@@ -150,6 +161,9 @@ export class GaussianOutputParser {
         // 确定任务类型
         const jobType = this.determineJobType(route, summaryText);
         
+        // 提取最终能量
+        const finalEnergy = this.extractFinalEnergy(energyResults, route);
+        
         // 如果没有找到任何有用信息，跳过这个任务
         if (!route && energyResults.length === 0) {
             return null;
@@ -162,6 +176,7 @@ export class GaussianOutputParser {
             route: route || '未知计算类型',
             title: title || `任务 ${jobNumber}`,
             energyResults,
+            finalEnergy,
             version,
             state,
             pointGroup,
@@ -204,6 +219,50 @@ export class GaussianOutputParser {
         };
         
         return descriptions[method] || method;
+    }
+    
+    private static extractFinalEnergy(energyResults: EnergyResult[], route: string): EnergyResult | undefined {
+        if (energyResults.length === 0) {
+            return undefined;
+        }
+        
+        // 能量方法优先级（从高到低）
+        const priorityOrder = [
+            'QCISD(T)',         // 最高级别
+            'CCSD(T)',          // Gold standard
+            'E(CBS-QB3)',       // 复合方法
+            'ONIOM',            // ONIOM方法（需要特殊处理）
+            'CCSD',             // CCSD
+            'MP4SDQ',           // MP4 full
+            'MP4',              // MP4 full (alternative)
+            'MP4DQ',            // MP4 with DQ
+            'MP4D',             // MP4 with D
+            'MP2',              // MP2
+            'HF'                // 最基础的方法
+        ];
+        
+        // 特殊处理：查找包含特定关键词的能量
+        for (const result of energyResults) {
+            if (result.method.includes('CBS-QB3') || 
+                result.method.includes('extrapolated energy') ||
+                result.method.includes('ONIOM')) {
+                return result;
+            }
+        }
+        
+        // 按优先级查找
+        for (const priority of priorityOrder) {
+            const found = energyResults.find(result => 
+                result.method === priority || 
+                result.method.startsWith(priority)
+            );
+            if (found) {
+                return found;
+            }
+        }
+        
+        // 如果没有找到预定义的方法，返回最后一个能量（通常是最终能量）
+        return energyResults[energyResults.length - 1];
     }
     
     private static checkTerminationStatus(content: string): { status: 'normal' | 'error' | 'running' | 'unknown', message?: string } {
