@@ -71,6 +71,11 @@ export class GaussianOutputPreviewProvider {
             
             GaussianOutputPreviewProvider.currentPanel.webview.html = html;
             
+            if (parsedOutput.terminationStatus != "running" && parsedOutput.terminationStatus != "unknown"){
+                if (GaussianOutputPreviewProvider.refreshTimer) {
+                    clearInterval(GaussianOutputPreviewProvider.refreshTimer);
+                }
+            }
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to preview Gaussian output: ${error}`);
         }
@@ -333,11 +338,11 @@ export class GaussianOutputPreviewProvider {
         
         ${this.generateStatusBanner(terminationStatus, terminationMessage)}
         
-        ${this.generateSimpleTable(jobs)}
-        
         <div class="jobs-container">
-            ${jobs.map((job, index) => this.generateJobSection(job, index + 1)).join('')}
+        ${jobs.map((job, index) => this.generateJobSection(job, index + 1)).join('')}
         </div>
+
+        ${this.generateSimpleTable(jobs)}
     </div>
 </body>
 </html>`;
@@ -447,26 +452,9 @@ export class GaussianOutputPreviewProvider {
             return '<div class="no-data">没有计算任务数据</div>';
         }
 
-        // 生成表头
-        const headers = new Array<string>();
-        jobs.forEach((job, index) => {
-            headers.push(job.route);
-        });
-
-        // 生成能量行
-        const energyRow = Array<string>();
-        jobs.forEach(job => {
-            if (job.finalEnergy) {
-                energyRow.push(job.finalEnergy.energy.toString());
-            } else {
-                energyRow.push('N/A');
-            }
-        });
-
         // 生成HTML表格
         const tableStyle = `
             style="
-                width: 100%; 
                 border-collapse: collapse; 
                 margin: 20px 0; 
                 font-family: 'Courier New', monospace;
@@ -496,15 +484,21 @@ export class GaussianOutputPreviewProvider {
 
         let tableHtml = `
             <h2>能量表</h2>
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <table ${tableStyle}>
-                    <thead>
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;" align="center">
+                <table ${tableStyle} align="center">
+                    <thead ${headerStyle}>
                         <tr>
-                            ${headers.map(h => `<th ${headerStyle}>${h}</th>`).join('')}
+                            <th>名称</th>
+                            <th>计算方法</th>
+                            <th>能量</th>
                         </tr>
-                        <tr>
-                            ${energyRow.map(cell => `<td ${cellStyle}>${cell}</td>`).join('')}
-                        </tr>
+                    </thead>
+                    <tbody>
+                        ${jobs.map(job => `<tr>
+                            <td ${cellStyle}>${job.title}</td>
+                            <td ${cellStyle}>${job.route}</td>
+                            <td ${cellStyle}>${job.finalEnergy ? job.finalEnergy.energy.toString() : 'N/A'}</td>
+                        </tr>`).join('')}
                     </tbody>
                 </table>
             </div>
