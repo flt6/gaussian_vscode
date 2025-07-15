@@ -6,9 +6,12 @@ export class GaussianCompletionProvider implements vscode.CompletionItemProvider
     private readonly keywords = {
         // 计算方法
         methods: [
-            'HF', 'MP2', 'MP3', 'MP4', 'MP5', 'CCSD', 'CCSDT', 'QCISD', 'CID', 'CISD', 'CIS',
-            'B3LYP', 'B3PW91', 'BLYP', 'PBE', 'PBE0', 'M06', 'M062X', 'CAM-B3LYP', 'wB97XD', 'LC-wPBE',
-            'LSDA', 'SVWN', 'PW91', 'mPW1PW91', 'HCTH', 'HCTH147', 'HCTH407'
+            'HF', 'MP2', 'MP3', 'MP4','MP4(DQ)','MP4(SDQ)', 'MP5', 'CCSD', 'CCSDT', 'QCISD', 'CID', 'CISD', 'CIS',
+            'B3LYP', 'B3PW91', 'BLYP', 'PBE', 'PBE0', 'M06', 'M062X', 'M06L', 'M06HF',
+            'CAM-B3LYP', 'wb97xd', 'wb97xd3', 'LC-wPBE', 'HSE06',
+            'LSDA', 'SVWN', 'PW91', 'mPW1PW91', 'HCTH', 'HCTH147', 'HCTH407',
+            'TPSSh', 'TPSS', 'revPBE', 'PBEPBE',
+            'B2PLYP', 'mPW2PLYP', 'B2PLYPD3', 'PBE0DH', 'PBEQIDH'
         ],
         
         // 基组
@@ -17,8 +20,9 @@ export class GaussianCompletionProvider implements vscode.CompletionItemProvider
             '6-311G', '6-311G(d)', '6-311G(d,p)', '6-311+G(d)', '6-311+G(d,p)', '6-311++G(d,p)',
             'cc-pVDZ', 'cc-pVTZ', 'cc-pVQZ', 'cc-pV5Z', 'cc-pV6Z',
             'aug-cc-pVDZ', 'aug-cc-pVTZ', 'aug-cc-pVQZ', 'aug-cc-pV5Z',
-            'def2-SVP', 'def2-SVPD', 'def2-TZVP', 'def2-TZVPD', 'def2-QZVP',
-            'LANL2DZ', 'LANL2MB', 'SDD', 'CEP-4G', 'CEP-31G', 'CEP-121G'
+            'def2SVP', 'def2SVPD', 'def2TZVP', 'def2TZVPD', 'def2QZVP', 'def2QZVPP',
+            'LANL2DZ', 'LANL2MB', 'SDD', 'CEP-4G', 'CEP-31G', 'CEP-121G',
+            'DGDZVP', 'DGDZVP2', 'Gen', 'GenECP'
         ],
         
         // 任务类型

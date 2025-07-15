@@ -54,7 +54,7 @@
 			"patterns": [
 				{
 					"name": "keyword.other.method.gaussian",
-					"match": "\\b(?i)(HF|MP2|MP3|MP4|MP5|CCSD|CCSDT|QCISD|CID|CISD|CIS|B3LYP|B3PW91|BLYP|PBE|PBE0|M06|M062X|CAM-B3LYP|wB97XD|LC-wPBE)\\b"
+					"match": "\\b(?i)(HF|MP2|MP3|MP4|MP5|CCSD|CCSDT|QCISD|CID|CISD|CIS|B3LYP|B3PW91|BLYP|PBE|PBE0|M06|M062X|M06L|M06HF|CAM-B3LYP|wb97xd|wb97xd3|LC-wPBE|HSE06|TPSSh|TPSS|revPBE|PBEPBE)\\b"
 				},
 				{
 					"name": "keyword.other.basis.gaussian",
