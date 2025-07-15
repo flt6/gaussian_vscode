@@ -130,14 +130,12 @@ export class GaussianOutputParser {
             } else if (trimmedPart.includes('=') && /[A-Z]/.test(trimmedPart)) {
                 // 能量信息
                 const energyMatches = trimmedPart.match(/([A-Z0-9()]+)=(-?\d+\.\d+)/g);
-                console.log(trimmedPart)
                 if (energyMatches) {
                     energyMatches.forEach(match => {
                         const parts = match.match(/([A-Z0-9()]+)=(-?\d+\.\d+)/);
                         if (parts) {
                             const method = parts[1];
                             const energy = parseFloat(parts[2]);
-                            console.log(method,energy)
                             
                             // 避免重复添加相同的能量结果
                             if (!energyResults.some(result => result.method === method)) {
@@ -267,21 +265,71 @@ export class GaussianOutputParser {
     
     private static checkTerminationStatus(content: string): { status: 'normal' | 'error' | 'running' | 'unknown', message?: string } {
         const lines = content.split('\n');
+        let messages = '';
+        let warns = new Map<string, number>();
+        for (const match of content.matchAll(/(.*(Warning|Unable|failed|impossible).*)/gi)) {
+            if (match[0].includes("This program may not be used in any manner that")) continue;
+            
+            const warningText = match[0].trim();
+            warns.set(warningText, (warns.get(warningText) || 0) + 1);
+        }
         
+        for (const [warning, count] of warns) {
+            if (count > 1) {
+                messages += `注意：${warning} *${count}<br>`;
+            } else {
+                messages += `注意：${warning}<br>`;
+            }
+        }
+
         // 检查正常终止
         if (lines[lines.length - 2].includes('Normal termination of Gaussian')) {
-            return { status: 'normal', message: '计算正常完成' };
+            return { status: 'normal', message: messages + '计算正常完成' };
         }
         
         // 检查错误终止
         for (const line of lines) {
             if (line.includes('Error termination')) {
                 // 尝试提取错误信息
+                const impossibleMultiplicityMatch = content.match(/The combination of multiplicity\s*\d+\s*and\s*\d+\s*electrons is impossible./);
+                if (impossibleMultiplicityMatch){
+                    return { 
+                        status: 'error', 
+                        message: messages + `检查多重度设置` 
+                    };
+                }
+                const scfErrorMatch = content.match(/Convergence criterion not met./);
+                if (scfErrorMatch) {
+                    return { 
+                        status: 'error', 
+                        message: messages + `SCF不收敛` 
+                    };
+                }
+                const syntaxErrorMatch = content.match(/End of file in ZSymb./);
+                if (syntaxErrorMatch) {
+                    return { 
+                        status: 'error', 
+                        message: messages + `语法错误，检查文末是否有空行` 
+                    };
+                }
+                const emErrorMatch = content.match(/.+Unable to choose the S6 parameter.+ScaHFX=\s*([\d\.]+).+/);
+                if (emErrorMatch) {
+                    if (emErrorMatch.length >= 2 && emErrorMatch[1] === '0.0000') {
+                        return { 
+                            status: 'error', 
+                            message: messages + `纯粹的HF方法(或CCSD等）不能使用em参数。` 
+                        };
+                    }
+                    return { 
+                        status: 'error', 
+                        message: messages + `检查em参数与计算方法的兼容性`
+                    };
+                }
                 const errorMatch = line.match(/Error termination via (.+) at/);
                 const errorLocation = errorMatch ? errorMatch[1] : '未知位置';
                 return { 
                     status: 'error', 
-                    message: `计算异常终止 (${errorLocation})` 
+                    message: messages + `计算异常终止 (${errorLocation})` 
                 };
             }
         }

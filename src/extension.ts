@@ -84,9 +84,9 @@ async function runGaussianInput(uri: vscode.Uri) {
         cancellable: true
     }, async (progress, token) => {
         try {
-            // 执行 gsub32 命令
+            // 执行 fgsub 命令
             const { spawn } = require('child_process');
-            const process = spawn('gsub32', [fileNameNoExt], {
+            const process = spawn('/home/fanhj/calcs/lele/tools/fgsub', [fileNameNoExt], {
                 cwd: fileDir,
                 shell: true
             });
