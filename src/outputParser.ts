@@ -14,6 +14,7 @@ export interface CalculationJob {
     state?: string;
     pointGroup?: string;
     jobType: string;
+    enthalpy?: number;
 }
 
 export interface ParsedOutput {
@@ -35,6 +36,7 @@ export interface NormalizedJob {
     finalEnergy: number | null;
     energies: number[];
     frequencies: number[];
+    enthalpy: number | null;
 }
 
 export interface NormalizedOutput {
@@ -116,6 +118,7 @@ export class GaussianOutputParser {
 
             const scfEnergies = this.parseScfEnergies(jobContent);
             const frequencies = this.parseFrequencies(jobContent);
+            const enthalpy = this.parseEnthalpy(jobContent);
             const optSteps = this.parseOptimizationSteps(jobContent);
             const summaryEnergy = this.extractSummaryFinalEnergy(jobLines);
 
@@ -142,7 +145,8 @@ export class GaussianOutputParser {
                 currentEnergy,
                 finalEnergy,
                 energies,
-                frequencies
+                frequencies,
+                enthalpy
             });
         }
 
@@ -396,6 +400,12 @@ export class GaussianOutputParser {
             frequencies.push(...vals);
         }
         return frequencies;
+    }
+
+    private static parseEnthalpy(content: string): number | null {
+        const re = /Sum of electronic and thermal Enthalpies=\s+(-?\d+\.\d+)/;
+        const match = content.match(re);
+        return match ? parseFloat(match[1]) : null;
     }
 
     private static parseOptimizationSteps(content: string): number {

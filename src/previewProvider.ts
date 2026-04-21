@@ -428,6 +428,9 @@ export class GaussianOutputPreviewProvider {
           '<div class="legend"><span class="dot"></span><span>当前优化能量收敛趋势</span></div></div>'
         : '';
       const freqSec = showFreq ? '<div class="section-title">Top 10 Frequencies</div>' + renderFreqList(job.frequencies) : '';
+      const enthalpySec = (showFreq && job.enthalpy !== null && job.enthalpy !== undefined) 
+        ? '<div class="meta-row"><span class="meta-label">Enthalpies</span><span class="meta-value mono">' + formatEnergy(job.enthalpy) + '</span></div>'
+        : '';
       return '<article class="card">' +
         '<div class="card-header"><div class="card-title">' +
         '<h2>Job ' + job.id + ': ' + job.typeLabel + '</h2>' +
@@ -437,6 +440,7 @@ export class GaussianOutputPreviewProvider {
         '<div class="meta-row"><span class="meta-label">Name</span><span class="meta-value accent">' + job.name + '</span></div>' +
         optMeta +
         '<div class="meta-row"><span class="meta-label">Final Energy</span><span class="meta-value mono">' + formatEnergy(job.finalEnergy) + '</span></div>' +
+        enthalpySec +
         '</div>' +
         optChart + freqSec + 
         '</article>';
