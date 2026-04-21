@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { GaussianOutputParser, ParsedOutput, CalculationJob, EnergyResult } from './outputParser';
+import { GaussianOutputParser, NormalizedOutput } from './outputParser';
 
 export class GaussianOutputPreviewProvider {
     private static readonly viewType = 'gaussianOutputPreview';
@@ -13,14 +13,11 @@ export class GaussianOutputPreviewProvider {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // 保存当前URI用于刷新
         GaussianOutputPreviewProvider.currentUri = uri;
 
-        // 如果已有预览面板，则重用
         if (GaussianOutputPreviewProvider.currentPanel) {
             GaussianOutputPreviewProvider.currentPanel.reveal(column);
         } else {
-            // 创建新的预览面板
             GaussianOutputPreviewProvider.currentPanel = vscode.window.createWebviewPanel(
                 GaussianOutputPreviewProvider.viewType,
                 `Gaussian Output Preview - ${path.basename(uri.fsPath)}`,
@@ -32,12 +29,10 @@ export class GaussianOutputPreviewProvider {
             );
         }
 
-        // 设置关闭事件
         GaussianOutputPreviewProvider.currentPanel.onDidDispose(
             () => {
                 GaussianOutputPreviewProvider.currentPanel = undefined;
                 GaussianOutputPreviewProvider.currentUri = undefined;
-                // 清除定时器
                 if (GaussianOutputPreviewProvider.refreshTimer) {
                     clearInterval(GaussianOutputPreviewProvider.refreshTimer);
                     GaussianOutputPreviewProvider.refreshTimer = undefined;
@@ -46,10 +41,7 @@ export class GaussianOutputPreviewProvider {
             null
         );
 
-        // 加载内容
         await this.loadContent();
-
-        // 启动自动刷新
         this.startAutoRefresh();
     }
 
@@ -58,20 +50,17 @@ export class GaussianOutputPreviewProvider {
             return;
         }
 
-        // 读取文件内容
         try {
             const document = await vscode.workspace.openTextDocument(GaussianOutputPreviewProvider.currentUri);
             const content = document.getText();
-            
-            // 解析输出文件
-            const parsedOutput = GaussianOutputParser.parseOutput(content);
-            
-            // 生成HTML内容
-            const html = this.generateHtmlContent(parsedOutput, path.basename(GaussianOutputPreviewProvider.currentUri.fsPath));
-            
-            GaussianOutputPreviewProvider.currentPanel.webview.html = html;
-            
-            if (parsedOutput.terminationStatus != "running" && parsedOutput.terminationStatus != "unknown"){
+
+            const normalizedOutput = GaussianOutputParser.parseOutputNormalized(content);
+            const filename = path.basename(GaussianOutputPreviewProvider.currentUri.fsPath);
+
+            GaussianOutputPreviewProvider.currentPanel.webview.html =
+                GaussianOutputPreviewProvider.buildWebviewHtml(normalizedOutput, filename);
+
+            if (normalizedOutput.terminationStatus !== 'running' && normalizedOutput.terminationStatus !== 'unknown') {
                 if (GaussianOutputPreviewProvider.refreshTimer) {
                     clearInterval(GaussianOutputPreviewProvider.refreshTimer);
                 }
@@ -82,12 +71,10 @@ export class GaussianOutputPreviewProvider {
     }
 
     private static startAutoRefresh() {
-        // 清除现有定时器
         if (GaussianOutputPreviewProvider.refreshTimer) {
             clearInterval(GaussianOutputPreviewProvider.refreshTimer);
         }
 
-        // 设置每5秒刷新一次
         GaussianOutputPreviewProvider.refreshTimer = setInterval(async () => {
             if (GaussianOutputPreviewProvider.currentPanel && GaussianOutputPreviewProvider.currentUri) {
                 await this.loadContent();
@@ -95,415 +82,391 @@ export class GaussianOutputPreviewProvider {
         }, 5000);
     }
 
-    private static generateHtmlContent(parsedOutput: ParsedOutput, filename: string): string {
-        const { jobs, totalJobs, terminationStatus, terminationMessage } = parsedOutput;
-        
+    private static buildWebviewHtml(normalizedOutput: NormalizedOutput, filename: string): string {
+        const jobsJson = JSON.stringify(normalizedOutput.jobs);
+        const updateTime = new Date().toLocaleString('zh-CN');
+        console.log(`jobsJson length: ${jobsJson.length}, updateTime: ${updateTime}`);
+
         return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaussian Output Preview</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        h1 {
-            color: #2c3e50;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-            margin-bottom: 30px;
-        }
-        
-        h2 {
-            color: #34495e;
-            margin-top: 30px;
-            margin-bottom: 15px;
-            padding: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 8px;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .jobs-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .job-card {
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-left: 5px solid #3498db;
-        }
-        
-        .job-header {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-            color: white;
-            padding: 20px;
-            position: relative;
-        }
-        
-        .job-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-        
-        .job-route {
-            font-size: 14px;
-            opacity: 0.9;
-            font-family: 'Courier New', monospace;
-            background-color: rgba(255,255,255,0.2);
-            padding: 8px 12px;
-            border-radius: 5px;
-            margin-top: 10px;
-        }
-        
-        .job-type {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            background-color: rgba(255,255,255,0.2);
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
-        .summary-card {
-            background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-        
-        .summary-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        
-        .stat-item {
-            background-color: rgba(255,255,255,0.2);
-            padding: 15px;
-            border-radius: 8px;
-        }
-        
-        .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-        
-        .energy-value {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            color: #e74c3c;
-        }
-        
-        .method-name {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        
-        .highlight {
-            background-color: #fff3cd;
-        }
-        
-        .no-data {
-            text-align: center;
-            color: #7f8c8d;
-            font-style: italic;
-            padding: 40px 20px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        
-        .status-banner {
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            text-align: center;
-            font-size: 18px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .status-normal {
-            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
-            color: white;
-            border-left: 5px solid #00a085;
-        }
-        
-        .status-error {
-            background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
-            color: white;
-            border-left: 5px solid #c0392b;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-running {
-            background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
-            color: white;
-            border-left: 5px solid #e67e22;
-        }
-        
-        .status-unknown {
-            background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
-            color: white;
-            border-left: 5px solid #555;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
-        }
-        
-        .status-icon {
-            font-size: 24px;
-        }
-        
-        @media (max-width: 1024px) {
-            .jobs-container {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 15px;
-            }
-            
-            .jobs-container {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            
-            .job-header {
-                padding: 15px;
-            }
-            
-            .job-type {
-                position: static;
-                margin-top: 10px;
-                display: inline-block;
-            }
-            
-            .summary-stats {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gaussian Job Monitoring</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg-elev: #111a2b;
+      --panel: rgba(17, 26, 43, 0.88);
+      --panel-strong: rgba(20, 31, 52, 0.96);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e8eefc;
+      --muted: #94a3b8;
+      --line: rgba(255, 255, 255, 0.08);
+      --primary: #60a5fa;
+      --primary-soft: rgba(96, 165, 250, 0.16);
+      --success: #84cc16;
+      --success-bg: rgba(132, 204, 22, 0.18);
+      --done: #3b82f6;
+      --done-bg: rgba(59, 130, 246, 0.18);
+      --warning: #fbbf24;
+      --shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --font: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 22%),
+        linear-gradient(180deg, #0a1120 0%, #0d1626 100%);
+    }
+
+    .app {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .shell {
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: rgba(8, 15, 28, 0.7);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 22px 28px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+
+    .title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #cfe1ff;
+      background: linear-gradient(135deg, rgba(59,130,246,0.35), rgba(14,165,233,0.18));
+      border: 1px solid rgba(96, 165, 250, 0.3);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ghost-btn,
+    .select,
+    .search {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      height: 40px;
+    }
+
+    .ghost-btn {
+      padding: 0 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .ghost-btn:hover,
+    .select:hover,
+    .search:hover {
+      border-color: rgba(96, 165, 250, 0.35);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .search,
+    .select {
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .select {
+      min-width: 140px;
+    }
+
+    .search {
+      min-width: 220px;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .stat {
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .stat .value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      min-height: 260px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .card-title h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
+
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 32px; padding: 0 14px; border-radius: 999px;
+      font-size: 13px; font-weight: 700; white-space: nowrap; border: 1px solid transparent;
+    }
+    .badge.running { color: #dff7bb; background: var(--success-bg); border-color: rgba(132,204,22,0.22); }
+    .badge.completed { color: #d8e8ff; background: var(--done-bg); border-color: rgba(59,130,246,0.25); }
+    .badge.error { color: #ffd0d0; background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.28); }
+
+    .meta { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 18px; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; font-size: 15px; line-height: 1.65; }
+    .meta-label { color: var(--muted); min-width: 110px; }
+    .meta-value { color: var(--text); font-weight: 500; }
+    .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+    .accent { color: var(--primary); }
+
+    .section-title { font-size: 15px; font-weight: 700; margin: 8px 0 12px; color: #d8e4ff; }
+    .chart-panel { border: 1px solid var(--border); border-radius: 16px; background: rgba(4,10,20,0.32); padding: 12px 14px 8px; overflow: hidden; }
+    .chart-title { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .freq-list { margin: 0; padding-left: 28px; display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .freq-list li { color: #c9d8f5; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .footer-note { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .legend { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 4px rgba(96,165,250,0.12); }
+    .empty { border: 1px dashed rgba(255,255,255,0.12); border-radius: 16px; padding: 18px; color: var(--muted); text-align: center; }
+
+    @media (max-width: 1080px) { .summary, .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 680px) {
+      .header, .content, .card { padding-left: 16px; padding-right: 16px; }
+      .title h1 { font-size: 22px; }
+      .summary { grid-template-columns: 1fr; }
+      .search { min-width: 100%; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 Gaussian 输出文件预览</h1>
-        <p><strong>文件名:</strong> ${filename}</p>
-        <p style="color: #7f8c8d; font-size: 12px;">⏰ 最后更新: ${new Date().toLocaleString('zh-CN')}</p>
-        
-        ${this.generateStatusBanner(terminationStatus, terminationMessage)}
-        
-        <div class="jobs-container">
-        ${jobs.map((job, index) => this.generateJobSection(job, index + 1)).join('')}
+  <div class="app"><div class="shell">
+    <header class="header">
+      <div class="title-wrap">
+        <div class="logo">GJ</div>
+        <div class="title">
+          <h1>Gaussian Job Monitoring</h1>
+          <p>${filename} &nbsp;·&nbsp; 最后更新: ${updateTime}</p>
         </div>
+      </div>
+      <div class="toolbar">
+        <select class="select" id="statusFilter">
+          <option value="all">全部状态</option>
+          <option value="running">运行中</option>
+          <option value="completed">已完成</option>
+        </select>
+        <select class="select" id="typeFilter">
+          <option value="all">全部类型</option>
+          <option value="opt">Optimization</option>
+          <option value="freq">Frequency</option>
+          <option value="sp">Single Point</option>
+          <option value="td">TD-DFT</option>
+          <option value="irc">IRC</option>
+          <option value="scan">Scan</option>
+        </select>
+        <input class="search" id="keywordInput" type="text" placeholder="搜索任务名称或类型..." />
+      </div>
+    </header>
+    <main class="content">
+      <section class="summary" id="summary"></section>
+      <section class="grid" id="jobGrid"></section>
+    </main>
+  </div></div>
+  <script>
+    const allJobs = ${jobsJson};
+    const state = { jobs: allJobs, filters: { status: 'all', type: 'all', keyword: '' } };
+    const summaryEl = document.getElementById('summary');
+    const gridEl = document.getElementById('jobGrid');
+    const statusFilterEl = document.getElementById('statusFilter');
+    const typeFilterEl = document.getElementById('typeFilter');
+    const keywordInputEl = document.getElementById('keywordInput');
 
-        ${this.generateSimpleTable(jobs)}
-    </div>
+    function formatEnergy(v) {
+      return (v === null || v === undefined) ? 'Calculating...' : v.toFixed(4) + ' Hartree';
+    }
+    function progressText(job) { return job.type !== 'opt' ? '—' : String(job.completedSteps); }
+    function getStatusClass(s) { return s === 'running' ? 'running' : s === 'completed' ? 'completed' : 'error'; }
+
+    function renderSummary(jobs) {
+      const total = jobs.length;
+      const running = jobs.filter(j => j.status === 'running').length;
+      const completed = jobs.filter(j => j.status === 'completed').length;
+      summaryEl.innerHTML =
+        '<div class="stat"><div class="label">Total Jobs</div><div class="value mono">' + total + '</div></div>' +
+        '<div class="stat"><div class="label">Running</div><div class="value mono">' + running + '</div></div>' +
+        '<div class="stat"><div class="label">Completed</div><div class="value mono">' + completed + '</div></div>';
+    }
+
+    function createChartSVG(values) {
+      if (!values || values.length === 0) return '<div class="empty">无能量数据</div>';
+      const W = 640, H = 220, p = { t: 18, r: 18, b: 34, l: 62 };
+      const iW = W - p.l - p.r, iH = H - p.t - p.b;
+      const mn = Math.min(...values), mx = Math.max(...values);
+      const rng = Math.max(mx - mn, 0.001);
+      const yMn = mn - rng * 0.15, yMx = mx + rng * 0.15;
+      const cx = i => p.l + (i / Math.max(values.length - 1, 1)) * iW;
+      const cy = v => p.t + (1 - (v - yMn) / (yMx - yMn)) * iH;
+      const d = values.map((v, i) => (i === 0 ? 'M' : 'L') + ' ' + cx(i).toFixed(2) + ' ' + cy(v).toFixed(2)).join(' ');
+      const dots = values.map((v, i) => '<circle cx="' + cx(i).toFixed(2) + '" cy="' + cy(v).toFixed(2) + '" r="4.5" fill="#60a5fa" stroke="rgba(255,255,255,0.22)" stroke-width="1.2" />').join('');
+      const gl = [0,1,2,3].map(i => { const yy = p.t+(i/3)*iH; return '<line x1="'+p.l+'" y1="'+yy+'" x2="'+(W-p.r)+'" y2="'+yy+'" stroke="rgba(255,255,255,0.08)" stroke-width="1" />'; }).join('');
+      const yt = [0,1,2,3].map(i => { const v = yMx-(i/3)*(yMx-yMn); const yy = p.t+(i/3)*iH; return '<text x="'+(p.l-10)+'" y="'+(yy+4)+'" text-anchor="end" font-size="11" fill="#8ea3c0">'+v.toFixed(2)+'</text>'; }).join('');
+      const xi = [0, Math.floor((values.length-1)/2), values.length-1].filter((v,i,a) => a.indexOf(v)===i);
+      const xt = xi.map(s => '<text x="'+cx(s)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="#8ea3c0">'+(s+1)+'</text>').join('');
+      return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="220" preserveAspectRatio="none">'+gl+
+        '<line x1="'+p.l+'" y1="'+(H-p.b)+'" x2="'+(W-p.r)+'" y2="'+(H-p.b)+'" stroke="rgba(255,255,255,0.12)" />'+
+        '<line x1="'+p.l+'" y1="'+p.t+'" x2="'+p.l+'" y2="'+(H-p.b)+'" stroke="rgba(255,255,255,0.12)" />'+
+        '<path d="'+d+'" fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />'+
+        dots+yt+xt+
+        '<text x="'+(W/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="12" fill="#a8bad5">Steps</text>'+
+        '<text x="18" y="'+(H/2)+'" text-anchor="middle" font-size="12" fill="#a8bad5" transform="rotate(-90 18 '+(H/2)+')">Energy (Hartree)</text>'+
+        '</svg>';
+    }
+
+    function renderFreqList(freqs) {
+      if (!freqs || freqs.length === 0) return '<div class="empty">该任务没有频率数据</div>';
+      return '<ol class="freq-list">' +
+        freqs.slice(0, 10).map((f, i) => '<li class="mono">' + (i+1) + '. ' + f.toFixed(1) + ' cm\u207b\u00b9</li>').join('') +
+        '</ol>';
+    }
+
+    function renderJobCard(job) {
+      const showOpt = job.type === 'opt', showFreq = job.type === 'freq';
+      const optMeta = showOpt
+        ? '<div class="meta-row"><span class="meta-label">Completed Steps</span><span class="meta-value mono">' + progressText(job) + '</span></div>' +
+          '<div class="meta-row"><span class="meta-label">Current Energy</span><span class="meta-value mono">' + formatEnergy(job.currentEnergy) + '</span></div>'
+        : '';
+      const optChart = showOpt && job.energies && job.energies.length > 0
+        ? '<div class="section-title">Optimization Progress</div><div class="chart-panel"><div class="chart-title">Energy vs. Steps</div>' +
+          createChartSVG(job.energies) +
+          '<div class="legend"><span class="dot"></span><span>当前优化能量收敛趋势</span></div></div>'
+        : '';
+      const freqSec = showFreq ? '<div class="section-title">Top 10 Frequencies</div>' + renderFreqList(job.frequencies) : '';
+      const spNote = job.type === 'sp' ? '<div class="footer-note">Single Point 任务通常只展示最终能量，不需要优化步信息或频率列表。</div>' : '';
+      return '<article class="card">' +
+        '<div class="card-header"><div class="card-title">' +
+        '<h2>Job ' + job.id + ': ' + job.typeLabel + '</h2>' +
+        '<span class="badge ' + getStatusClass(job.status) + '">' + job.statusLabel + '</span>' +
+        '</div></div>' +
+        '<div class="meta">' +
+        '<div class="meta-row"><span class="meta-label">Name</span><span class="meta-value accent">' + job.name + '</span></div>' +
+        optMeta +
+        '<div class="meta-row"><span class="meta-label">Final Energy</span><span class="meta-value mono">' + formatEnergy(job.finalEnergy) + '</span></div>' +
+        '</div>' +
+        optChart + freqSec + spNote +
+        '</article>';
+    }
+
+    function getFilteredJobs() {
+      return state.jobs.filter(job => {
+        const ms = state.filters.status === 'all' || job.status === state.filters.status;
+        const mt = state.filters.type === 'all' || job.type === state.filters.type;
+        const kw = state.filters.keyword.trim().toLowerCase();
+        return ms && mt && (!kw || (job.name + ' ' + job.typeLabel).toLowerCase().includes(kw));
+      });
+    }
+
+    function render() {
+      const filtered = getFilteredJobs();
+      renderSummary(filtered);
+      gridEl.innerHTML = filtered.length === 0
+        ? '<div class="empty">没有符合当前筛选条件的任务</div>'
+        : filtered.map(renderJobCard).join('');
+    }
+
+    statusFilterEl.addEventListener('change', e => { state.filters.status = e.target.value; render(); });
+    typeFilterEl.addEventListener('change', e => { state.filters.type = e.target.value; render(); });
+    keywordInputEl.addEventListener('input', e => { state.filters.keyword = e.target.value; render(); });
+    render();
+  </script>
 </body>
 </html>`;
     }
-
-    private static generateStatusBanner(status: string, message?: string): string {
-        let statusClass = '';
-        let statusIcon = '';
-        let statusText = '';
-        
-        switch (status) {
-            case 'normal':
-                statusClass = 'status-normal';
-                statusIcon = '✅';
-                statusText = message || '计算正常完成';
-                break;
-            case 'error':
-                statusClass = 'status-error';
-                statusIcon = '❌';
-                statusText = message || '计算异常终止';
-                break;
-            case 'running':
-                statusClass = 'status-running';
-                statusIcon = '⏳';
-                statusText = message || '计算可能仍在进行中';
-                break;
-            case 'unknown':
-            default:
-                statusClass = 'status-unknown';
-                statusIcon = '❓';
-                statusText = message || '无法确定计算状态';
-                break;
-        }
-        
-        return `
-            <div class="status-banner ${statusClass}">
-                <span class="status-icon">${statusIcon}</span>
-                <span>${statusText}</span>
-            </div>
-        `;
-    }
-    private static generateJobSection(job: CalculationJob, index: number): string {
-        return `
-            <div class="job-card">
-                <div class="job-header">
-                    <div class="job-type">${job.jobType}</div>
-                    <div class="job-title">🔬 ${job.title}</div>
-                    <div class="job-route">${job.route}</div>
-                </div>
-                
-                <div style="padding: 20px;">
-                    ${this.generateFinalEnergy(job.finalEnergy)}        
-                    <h3 style="margin-top: 0; color: #2c3e50;">⚡ 结果参数</h3>
-                    ${this.generateEnergyTable(job.energyResults)}
-                </div>
-            </div>
-        `;
-    }
-    private static generateFinalEnergy(energy: EnergyResult|undefined): string{
-        if (energy == undefined){
-            return  "";
-        }
-        return `<h3 style="margin-top: 0; color: #2c3e50;">能量：
-        <div class="energy-value" style="font-size: 1.5em;">${energy.energy}</div></h3>`
-    }
-
-    private static generateEnergyTable(energyResults: any[]): string {
-        if (!energyResults || energyResults.length === 0) {
-            return '<div class="no-data">未找到参数</div>';
-        }
-
-        // 将结果分组，每2个为一行
-        const rows = [];
-        for (let i = 0; i < energyResults.length; i += 2) {
-            rows.push(energyResults.slice(i, i + 2));
-        }
-
-        const tableRows = rows.map(row => {
-            const cells = row.map(result => {
-                const isHighlight = result.method === 'CCSD(T)' || result.method === 'CCSD';
-                return `
-                    <td ${isHighlight ? 'class="highlight"' : ''} style="text-align: center; padding: 15px; border: 1px solid #ddd;">
-                        <div class="method-name" style="margin-bottom: 8px; font-size: 14px;">${result.method}</div>
-                        <div class="energy-value" style="font-size: 12px;">${result.energy}</div>
-                    </td>
-                `;
-            }).join('');
-            
-            // 如果这一行不足2个，补充空单元格
-            const emptyCells = row.length < 2 ? 
-                Array(2 - row.length).fill('<td style="border: 1px solid #ddd;"></td>').join('') : '';
-            
-            return `<tr>${cells}${emptyCells}</tr>`;
-        }).join('');
-
-        return `
-            <table style="width: 100%; border-collapse: collapse;">
-                <tbody>
-                    ${tableRows}
-                </tbody>
-            </table>
-        `;
-    }
-
-    private static generateSimpleTable(jobs: CalculationJob[]): string {
-        if (!jobs || jobs.length === 0) {
-            return '<div class="no-data">没有计算任务数据</div>';
-        }
-
-        // 生成HTML表格
-        const tableStyle = `
-            style="
-                border-collapse: collapse; 
-                margin: 20px 0; 
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                background-color: #f8f9fa;
-            "
-        `;
-
-        const cellStyle = `
-            style="
-                border: 1px solid #333; 
-                padding: 8px; 
-                text-align: center;
-                background-color: white;
-            "
-        `;
-
-        const headerStyle = `
-            style="
-                border: 1px solid #333; 
-                padding: 8px; 
-                text-align: center;
-                background-color: #e9ecef;
-                font-weight: bold;
-            "
-        `;
-
-        let tableHtml = `
-            <h2>能量表</h2>
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;" align="center">
-                <table ${tableStyle} align="center">
-                    <thead ${headerStyle}>
-                        <tr>
-                            <th>名称</th>
-                            <th>计算方法</th>
-                            <th>能量</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${jobs.map(job => `<tr>
-                            <td ${cellStyle}>${job.title}</td>
-                            <td ${cellStyle}>${job.route}</td>
-                            <td ${cellStyle}>${job.finalEnergy ? job.finalEnergy.energy.toString() : 'N/A'}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        return tableHtml;
-    }
 }
+

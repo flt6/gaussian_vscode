@@ -21,7 +21,7 @@
       "%NProcShared=32", 
       "%chk=${TM_FILENAME_BASE}.chk",
       "%mem=30GB",
-      "#p ${1|wB97XD|}/def2-SVP opt",
+      "#p ${1|wB97XD|}/def2SVP opt",
       "",
       "${2|Job descript|}",
       "",

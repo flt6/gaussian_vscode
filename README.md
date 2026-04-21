@@ -9,7 +9,7 @@
 - **Link0命令**：以`%`开头的命令（如`%chk`, `%mem`, `%nproc`等）
 - **Route Section**：以`#`开头的计算设置行
 - **计算方法**：HF, DFT方法（B3LYP, PBE0等），后HF方法（MP2, CCSD等）
-- **基组**：各种基组（6-31G(d), cc-pVDZ, def2-TZVP等）
+- **基组**：各种基组（6-31G(d), cc-pVDZ, def2TZVP等）
 - **任务类型**：OPT, FREQ, SP, IRC, SCAN等
 - **元素符号**：自动识别化学元素
 - **注释**：以`!`开头的注释行
