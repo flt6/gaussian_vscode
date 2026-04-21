@@ -56,9 +56,12 @@ export class GaussianOutputPreviewProvider {
 
             const normalizedOutput = GaussianOutputParser.parseOutputNormalized(content);
             const filename = path.basename(GaussianOutputPreviewProvider.currentUri.fsPath);
+            
+            const chartJsPath = vscode.Uri.file(path.join(__dirname, '..', 'js', 'Chart.js'));
+            const chartJsUri = GaussianOutputPreviewProvider.currentPanel.webview.asWebviewUri(chartJsPath);
 
             GaussianOutputPreviewProvider.currentPanel.webview.html =
-                GaussianOutputPreviewProvider.buildWebviewHtml(normalizedOutput, filename);
+                GaussianOutputPreviewProvider.buildWebviewHtml(normalizedOutput, filename, chartJsUri);
 
             if (normalizedOutput.terminationStatus !== 'running' && normalizedOutput.terminationStatus !== 'unknown') {
                 if (GaussianOutputPreviewProvider.refreshTimer) {
@@ -82,7 +85,7 @@ export class GaussianOutputPreviewProvider {
         }, 5000);
     }
 
-    private static buildWebviewHtml(normalizedOutput: NormalizedOutput, filename: string): string {
+    private static buildWebviewHtml(normalizedOutput: NormalizedOutput, filename: string, chartJsUri: vscode.Uri): string {
         const jobsJson = JSON.stringify(normalizedOutput.jobs);
         const updateTime = new Date().toLocaleString('zh-CN');
         console.log(`jobsJson length: ${jobsJson.length}, updateTime: ${updateTime}`);
@@ -93,6 +96,7 @@ export class GaussianOutputPreviewProvider {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gaussian Job Monitoring</title>
+  <script src="${chartJsUri}"></script>
   <style>
     :root {
       --bg: #0b1220;
@@ -239,7 +243,7 @@ export class GaussianOutputPreviewProvider {
 
     .summary {
       display: grid;
-      grid-template-columns: repeat(3, minmax(160px, 1fr));
+      grid-template-columns: repeat(2, minmax(160px, 1fr));
       gap: 14px;
       margin-bottom: 18px;
     }
@@ -361,6 +365,9 @@ export class GaussianOutputPreviewProvider {
   </div></div>
   <script>
     const allJobs = ${jobsJson};
+    const totalJobs = ${normalizedOutput.totalJobs};
+    const terminationStatus = "${normalizedOutput.terminationStatus}";
+    const terminationMessage = ${normalizedOutput.terminationMessage ? JSON.stringify(normalizedOutput.terminationMessage) : 'null'};
     const state = { jobs: allJobs, filters: { status: 'all', type: 'all', keyword: '' } };
     const summaryEl = document.getElementById('summary');
     const gridEl = document.getElementById('jobGrid');
@@ -369,50 +376,43 @@ export class GaussianOutputPreviewProvider {
     const keywordInputEl = document.getElementById('keywordInput');
 
     function formatEnergy(v) {
-      return (v === null || v === undefined) ? 'Calculating...' : v.toFixed(4) + ' Hartree';
+      return (v === null || v === undefined) ? 'Calculating...' : v.toFixed(6) + ' Hartree';
     }
     function progressText(job) { return job.type !== 'opt' ? '—' : String(job.completedSteps); }
     function getStatusClass(s) { return s === 'running' ? 'running' : s === 'completed' ? 'completed' : 'error'; }
 
     function renderSummary(jobs) {
-      const total = jobs.length;
-      const running = jobs.filter(j => j.status === 'running').length;
-      const completed = jobs.filter(j => j.status === 'completed').length;
-      summaryEl.innerHTML =
-        '<div class="stat"><div class="label">Total Jobs</div><div class="value mono">' + total + '</div></div>' +
-        '<div class="stat"><div class="label">Running</div><div class="value mono">' + running + '</div></div>' +
-        '<div class="stat"><div class="label">Completed</div><div class="value mono">' + completed + '</div></div>';
+      const summaryHtml =
+        '<div class="stat"><div class="label">总任务数</div><div class="value mono">' + totalJobs + '</div></div>' +
+        '<div class="stat"><div class="label">状态</div><div class="value mono" style="font-size: 24px;">' + terminationStatus + '</div></div>';
+      
+      const errorHtml = terminationMessage 
+        ? '<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); margin-bottom: 18px; color: #ffb3b3; padding: 12px 16px; border-radius: 12px; font-size: 14px;">' + terminationMessage + '</div>'
+        : '';
+        
+      summaryEl.innerHTML = summaryHtml;
+      
+      // Inject error message after summary if it exists
+      const oldErrorEl = document.getElementById('terminationError');
+      if (oldErrorEl) oldErrorEl.remove();
+      
+      if (terminationMessage) {
+        const errDiv = document.createElement('div');
+        errDiv.id = 'terminationError';
+        errDiv.innerHTML = errorHtml;
+        summaryEl.parentNode.insertBefore(errDiv, summaryEl.nextSibling);
+      }
     }
 
-    function createChartSVG(values) {
-      if (!values || values.length === 0) return '<div class="empty">无能量数据</div>';
-      const W = 640, H = 220, p = { t: 18, r: 18, b: 34, l: 62 };
-      const iW = W - p.l - p.r, iH = H - p.t - p.b;
-      const mn = Math.min(...values), mx = Math.max(...values);
-      const rng = Math.max(mx - mn, 0.001);
-      const yMn = mn - rng * 0.15, yMx = mx + rng * 0.15;
-      const cx = i => p.l + (i / Math.max(values.length - 1, 1)) * iW;
-      const cy = v => p.t + (1 - (v - yMn) / (yMx - yMn)) * iH;
-      const d = values.map((v, i) => (i === 0 ? 'M' : 'L') + ' ' + cx(i).toFixed(2) + ' ' + cy(v).toFixed(2)).join(' ');
-      const dots = values.map((v, i) => '<circle cx="' + cx(i).toFixed(2) + '" cy="' + cy(v).toFixed(2) + '" r="4.5" fill="#60a5fa" stroke="rgba(255,255,255,0.22)" stroke-width="1.2" />').join('');
-      const gl = [0,1,2,3].map(i => { const yy = p.t+(i/3)*iH; return '<line x1="'+p.l+'" y1="'+yy+'" x2="'+(W-p.r)+'" y2="'+yy+'" stroke="rgba(255,255,255,0.08)" stroke-width="1" />'; }).join('');
-      const yt = [0,1,2,3].map(i => { const v = yMx-(i/3)*(yMx-yMn); const yy = p.t+(i/3)*iH; return '<text x="'+(p.l-10)+'" y="'+(yy+4)+'" text-anchor="end" font-size="11" fill="#8ea3c0">'+v.toFixed(2)+'</text>'; }).join('');
-      const xi = [0, Math.floor((values.length-1)/2), values.length-1].filter((v,i,a) => a.indexOf(v)===i);
-      const xt = xi.map(s => '<text x="'+cx(s)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="#8ea3c0">'+(s+1)+'</text>').join('');
-      return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="220" preserveAspectRatio="none">'+gl+
-        '<line x1="'+p.l+'" y1="'+(H-p.b)+'" x2="'+(W-p.r)+'" y2="'+(H-p.b)+'" stroke="rgba(255,255,255,0.12)" />'+
-        '<line x1="'+p.l+'" y1="'+p.t+'" x2="'+p.l+'" y2="'+(H-p.b)+'" stroke="rgba(255,255,255,0.12)" />'+
-        '<path d="'+d+'" fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />'+
-        dots+yt+xt+
-        '<text x="'+(W/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="12" fill="#a8bad5">Steps</text>'+
-        '<text x="18" y="'+(H/2)+'" text-anchor="middle" font-size="12" fill="#a8bad5" transform="rotate(-90 18 '+(H/2)+')">Energy (Hartree)</text>'+
-        '</svg>';
+    function createChartHTML(job) {
+      if (!job.energies || job.energies.length === 0) return '<div class="empty">无能量数据</div>';
+      return '<div style="position: relative; width: 100%; height: 220px;"><canvas id="chart-' + job.id + '"></canvas></div>';
     }
 
     function renderFreqList(freqs) {
       if (!freqs || freqs.length === 0) return '<div class="empty">该任务没有频率数据</div>';
       return '<ol class="freq-list">' +
-        freqs.slice(0, 10).map((f, i) => '<li class="mono">' + (i+1) + '. ' + f.toFixed(1) + ' cm\u207b\u00b9</li>').join('') +
+        freqs.slice(0, 10).map((f, i) => '<li class="mono">' + f.toFixed(2) + ' cm\u207b\u00b9</li>').join('') +
         '</ol>';
     }
 
@@ -424,11 +424,10 @@ export class GaussianOutputPreviewProvider {
         : '';
       const optChart = showOpt && job.energies && job.energies.length > 0
         ? '<div class="section-title">Optimization Progress</div><div class="chart-panel"><div class="chart-title">Energy vs. Steps</div>' +
-          createChartSVG(job.energies) +
+          createChartHTML(job) +
           '<div class="legend"><span class="dot"></span><span>当前优化能量收敛趋势</span></div></div>'
         : '';
       const freqSec = showFreq ? '<div class="section-title">Top 10 Frequencies</div>' + renderFreqList(job.frequencies) : '';
-      const spNote = job.type === 'sp' ? '<div class="footer-note">Single Point 任务通常只展示最终能量，不需要优化步信息或频率列表。</div>' : '';
       return '<article class="card">' +
         '<div class="card-header"><div class="card-title">' +
         '<h2>Job ' + job.id + ': ' + job.typeLabel + '</h2>' +
@@ -439,7 +438,7 @@ export class GaussianOutputPreviewProvider {
         optMeta +
         '<div class="meta-row"><span class="meta-label">Final Energy</span><span class="meta-value mono">' + formatEnergy(job.finalEnergy) + '</span></div>' +
         '</div>' +
-        optChart + freqSec + spNote +
+        optChart + freqSec + 
         '</article>';
     }
 
@@ -452,12 +451,80 @@ export class GaussianOutputPreviewProvider {
       });
     }
 
+    let chartInstances = {};
+
     function render() {
       const filtered = getFilteredJobs();
       renderSummary(filtered);
+      
+      // Cleanup old chart instances
+      Object.keys(chartInstances).forEach(id => {
+        chartInstances[id].destroy();
+      });
+      chartInstances = {};
+
       gridEl.innerHTML = filtered.length === 0
         ? '<div class="empty">没有符合当前筛选条件的任务</div>'
         : filtered.map(renderJobCard).join('');
+        
+      // Initialize charts
+      filtered.forEach(job => {
+        if (job.type === 'opt' && job.energies && job.energies.length > 0) {
+          const ctx = document.getElementById('chart-' + job.id);
+          if (ctx) {
+            chartInstances[job.id] = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: job.energies.map((_, i) => (i + 1)),
+                datasets: [{
+                  label: 'Energy (Hartree)',
+                  data: job.energies,
+                  borderColor: '#60a5fa',
+                  backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                  pointBackgroundColor: '#60a5fa',
+                  pointBorderColor: 'rgba(255,255,255,0.22)',
+                  pointRadius: 4,
+                  pointHoverRadius: 6,
+                  fill: true,
+                  tension: 0.1,
+                  borderWidth: 2
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleColor: '#94a3b8',
+                    bodyColor: '#e8eefc',
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    callbacks: {
+                      label: function(context) {
+                        return (context.dataset.label || 'Energy') + ': ' + context.parsed.y.toFixed(6) + ' Hartree';
+                      }
+                    }
+                  }
+                },
+                scales: {
+                  x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8ea3c0', maxTicksLimit: 10 }
+                  },
+                  y: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8ea3c0' }
+                  }
+                }
+              }
+            });
+          }
+        }
+      });
     }
 
     statusFilterEl.addEventListener('change', e => { state.filters.status = e.target.value; render(); });
