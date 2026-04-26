@@ -338,22 +338,22 @@ export class GaussianOutputParser {
     }
 
     private static extractTitleFromJobLines(lines: string[]): string {
-        let routeFound = false;
-        let separatorCount = 0;
+        let afterL101 = false;
+        let afterFirstDash = false;
         for (const line of lines) {
             const trimmed = line.trim();
-            if (!routeFound && trimmed.startsWith('#')) {
-                routeFound = true;
+            if (!afterL101) {
+                if (trimmed.includes('Enter /share/apps/soft/g16/l101.exe')) {
+                    afterL101 = true;
+                }
                 continue;
             }
-            if (routeFound) {
-                if (trimmed === '' || /^-{3,}$/.test(trimmed)) {
-                    separatorCount++;
-                    continue;
-                }
-                if (separatorCount >= 1 && trimmed.length > 0 && trimmed.length < 120) {
-                    return trimmed;
-                }
+            if (!afterFirstDash) {
+                if (/^-{3,}$/.test(trimmed)) { afterFirstDash = true; }
+                continue;
+            }
+            if (trimmed.length > 0 && !/^-{3,}$/.test(trimmed)) {
+                return trimmed;
             }
         }
         return 'Job';
