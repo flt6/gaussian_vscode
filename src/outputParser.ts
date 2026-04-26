@@ -339,7 +339,7 @@ export class GaussianOutputParser {
 
     private static extractTitleFromJobLines(lines: string[]): string {
         let routeFound = false;
-        let blankCount = 0;
+        let separatorCount = 0;
         for (const line of lines) {
             const trimmed = line.trim();
             if (!routeFound && trimmed.startsWith('#')) {
@@ -347,11 +347,11 @@ export class GaussianOutputParser {
                 continue;
             }
             if (routeFound) {
-                if (trimmed === '') {
-                    blankCount++;
+                if (trimmed === '' || /^-{3,}$/.test(trimmed)) {
+                    separatorCount++;
                     continue;
                 }
-                if (blankCount >= 1 && trimmed.length > 0 && trimmed.length < 120) {
+                if (separatorCount >= 1 && trimmed.length > 0 && trimmed.length < 120) {
                     return trimmed;
                 }
             }
