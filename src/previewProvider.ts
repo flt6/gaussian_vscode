@@ -321,6 +321,21 @@ export class GaussianOutputPreviewProvider {
     .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 4px rgba(96,165,250,0.12); }
     .empty { border: 1px dashed rgba(255,255,255,0.12); border-radius: 16px; padding: 18px; color: var(--muted); text-align: center; }
 
+    .energy-table-panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .energy-table-panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 700; color: #d8e4ff; }
+    .energy-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .energy-table th { color: var(--muted); font-weight: 600; text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+    .energy-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); font-variant-numeric: tabular-nums; }
+    .energy-table tr:last-child td { border-bottom: none; }
+    .copy-btn { float: right; background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+    .copy-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
     @media (max-width: 1080px) { .summary, .grid { grid-template-columns: 1fr; } }
     @media (max-width: 680px) {
       .header, .content, .card { padding-left: 16px; padding-right: 16px; }
@@ -356,11 +371,13 @@ export class GaussianOutputPreviewProvider {
           <option value="scan">Scan</option>
         </select>
         <input class="search" id="keywordInput" type="text" placeholder="搜索任务名称或类型..." />
+        <button class="ghost-btn" id="unitToggle">Hartree</button>
       </div>
     </header>
     <main class="content">
       <section class="summary" id="summary"></section>
       <section class="grid" id="jobGrid"></section>
+      <section id="energySummary" style="margin-top:18px;"></section>
     </main>
   </div></div>
   <script>
@@ -368,15 +385,21 @@ export class GaussianOutputPreviewProvider {
     const totalJobs = ${normalizedOutput.totalJobs};
     const terminationStatus = "${normalizedOutput.terminationStatus}";
     const terminationMessage = ${normalizedOutput.terminationMessage ? JSON.stringify(normalizedOutput.terminationMessage) : 'null'};
-    const state = { jobs: allJobs, filters: { status: 'all', type: 'all', keyword: '' } };
+    const HARTREE_TO_EV = 27.211386245988;
+    const state = { jobs: allJobs, filters: { status: 'all', type: 'all', keyword: '' }, useEV: false };
     const summaryEl = document.getElementById('summary');
     const gridEl = document.getElementById('jobGrid');
+    const energySummaryEl = document.getElementById('energySummary');
     const statusFilterEl = document.getElementById('statusFilter');
     const typeFilterEl = document.getElementById('typeFilter');
     const keywordInputEl = document.getElementById('keywordInput');
+    const unitToggleEl = document.getElementById('unitToggle');
 
+    function convertEnergy(v) { return state.useEV ? v * HARTREE_TO_EV : v; }
+    function unitLabel() { return state.useEV ? 'eV' : 'Hartree'; }
     function formatEnergy(v) {
-      return (v === null || v === undefined) ? 'Calculating...' : v.toFixed(6) + ' Hartree';
+      if (v === null || v === undefined) return 'Calculating...';
+      return convertEnergy(v).toFixed(6) + ' ' + unitLabel();
     }
     function progressText(job) { return job.type !== 'opt' ? '—' : String(job.completedSteps); }
     function getStatusClass(s) { return s === 'running' ? 'running' : s === 'completed' ? 'completed' : 'error'; }
@@ -460,6 +483,7 @@ export class GaussianOutputPreviewProvider {
     function render() {
       const filtered = getFilteredJobs();
       renderSummary(filtered);
+      renderEnergySummary(filtered);
       
       // Cleanup old chart instances
       Object.keys(chartInstances).forEach(id => {
@@ -481,8 +505,8 @@ export class GaussianOutputPreviewProvider {
               data: {
                 labels: job.energies.map((_, i) => (i + 1)),
                 datasets: [{
-                  label: 'Energy (Hartree)',
-                  data: job.energies,
+                  label: 'Energy (' + unitLabel() + ')',
+                  data: job.energies.map(convertEnergy),
                   borderColor: '#60a5fa',
                   backgroundColor: 'rgba(96, 165, 250, 0.1)',
                   pointBackgroundColor: '#60a5fa',
@@ -509,7 +533,7 @@ export class GaussianOutputPreviewProvider {
                     borderWidth: 1,
                     callbacks: {
                       label: function(context) {
-                        return (context.dataset.label || 'Energy') + ': ' + context.parsed.y.toFixed(6) + ' Hartree';
+                        return (context.dataset.label || 'Energy') + ': ' + context.parsed.y.toFixed(6) + ' ' + unitLabel();
                       }
                     }
                   }
@@ -531,9 +555,33 @@ export class GaussianOutputPreviewProvider {
       });
     }
 
+    function renderEnergySummary(jobs) {
+      const rows = jobs
+        .filter(j => j.finalEnergy !== null && j.finalEnergy !== undefined)
+        .map(j => ({ name: j.name, energy: convertEnergy(j.finalEnergy) }));
+      if (rows.length === 0) { energySummaryEl.innerHTML = ''; return; }
+      const tsvText = rows.map(r => r.name + '\\t' + r.energy.toFixed(6)).join('\\n');
+      const tableRows = rows.map(r =>
+        '<tr><td>' + r.name.replace(/</g, '&lt;') + '</td><td class="mono">' + r.energy.toFixed(6) + '</td><td class="mono">' + unitLabel() + '</td></tr>'
+      ).join('');
+      energySummaryEl.innerHTML =
+        '<div class="energy-table-panel">' +
+        '<h3>Energy Summary <button class="copy-btn" id="copyTsv">Copy TSV</button></h3>' +
+        '<table class="energy-table"><thead><tr><th>Name</th><th>Energy</th><th>Unit</th></tr></thead>' +
+        '<tbody>' + tableRows + '</tbody></table></div>';
+      document.getElementById('copyTsv').addEventListener('click', () => {
+        navigator.clipboard.writeText(tsvText).catch(() => {});
+      });
+    }
+
     statusFilterEl.addEventListener('change', e => { state.filters.status = e.target.value; render(); });
     typeFilterEl.addEventListener('change', e => { state.filters.type = e.target.value; render(); });
     keywordInputEl.addEventListener('input', e => { state.filters.keyword = e.target.value; render(); });
+    unitToggleEl.addEventListener('click', () => {
+      state.useEV = !state.useEV;
+      unitToggleEl.textContent = state.useEV ? 'eV' : 'Hartree';
+      render();
+    });
     render();
   </script>
 </body>
